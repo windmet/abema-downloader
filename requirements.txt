@@ -1,0 +1,7 @@
+requests>=2.25
+click>=8.0
+tqdm>=4.60
+m3u8>=3.0
+pycryptodome>=3.10
+beautifulsoup4>=4.10
+lxml>=4.0

@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+*.pyo
+yuu_log-*.log
+
+# Binaries (install ffmpeg manually via PATH or place here)
+ffmpeg.exe
+ffplay.exe
+ffprobe.exe
+shaka-packager.exe
+binaries/
