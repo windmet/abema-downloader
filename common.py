@@ -1,6 +1,7 @@
 import json
 import os
 import re
+import socket
 import subprocess
 
 from tqdm import tqdm
@@ -85,3 +86,48 @@ def _prepare_yuu_data():
     if not os.path.isfile(os.path.join(yuu_folder, 'yuu_download.json')):
         with open(os.path.join(yuu_folder, 'yuu_download.json'), 'w') as f:
             json.dump({}, f)
+
+
+def check_ipv6():
+    """Check if IPv6 is active and might interfere with Japanese CDN connections."""
+    if not socket.has_ipv6:
+        return False
+
+    try:
+        s = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
+        s.close()
+    except OSError:
+        return False
+
+    if os.name == "nt":
+        try:
+            result = subprocess.run(
+                ['netsh', 'interface', 'ipv6', 'show', 'addresses'],
+                capture_output=True, text=True, timeout=10
+            )
+            for line in result.stdout.splitlines():
+                # fe80:: is link-local, skip it — check for global unicast
+                if 'fe80::' not in line and 'inet6' in result.stdout:
+                    return True
+        except (subprocess.TimeoutExpired, FileNotFoundError):
+            pass
+    else:
+        try:
+            result = subprocess.run(
+                ['ip', '-6', 'addr', 'show', 'scope', 'global'],
+                capture_output=True, text=True, timeout=10
+            )
+            if result.stdout.strip():
+                return True
+        except (subprocess.TimeoutExpired, FileNotFoundError):
+            try:
+                result = subprocess.run(
+                    ['ifconfig'], capture_output=True, text=True, timeout=10
+                )
+                for line in result.stdout.splitlines():
+                    if 'inet6' in line and not 'fe80::' in line:
+                        return True
+            except (subprocess.TimeoutExpired, FileNotFoundError):
+                pass
+
+    return False

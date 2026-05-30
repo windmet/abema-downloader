@@ -16,7 +16,7 @@
 ```bash
 # 克隆仓库
 git clone https://github.com/windmet/abema-downloader
-cd Yoimi
+cd abema-downloader
 
 # 安装依赖
 pip install -r requirements.txt
@@ -75,7 +75,6 @@ python yoimi.py download "https://video.unext.jp/play/xxx" --username 邮箱 --p
 
 ## 待优化项
 
-- **动态并发调节** — 当检测到大量 `ConnectionResetError` 时自动降低并发数（如 4→2→1），网络恢复后再升回去，而不是写死 4 线程
 - **SSL 兼容选项** — CDN 对部分 TLS 版本/密码套件不兼容，可增加 `--no-ssl-verify` 或切换底层 TLS 适配器
 - **自动检测 IPv6** — 启动时检测 IPv6 是否开启并给出提示
 - **文件名校验** — Windows 文件名最长 255 字符，下载前对超长文件名做裁剪

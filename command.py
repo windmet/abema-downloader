@@ -10,7 +10,7 @@ import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
-from common import (_prepare_yuu_data, get_parser,
+from common import (_prepare_yuu_data, check_ipv6, get_parser,
                      get_yuu_folder, merge_video, mux_video)
 
 CONTEXT_SETTINGS = dict(help_option_names=['-h', '--help'], ignore_unknown_options=True)
@@ -97,6 +97,9 @@ def main_downloader(input, username, password, proxy, res, resR, mux, muxfile, k
     if proxy:
         sesi.proxies = {'http': proxy, 'https': proxy}
     yuu_logger.debug('Using proxy: {}'.format(proxy))
+
+    if check_ipv6():
+        yuu_logger.warning('IPv6 已启用，访问日本 CDN 可能被重置连接。建议关闭 IPv6（详见 README）')
 
     _prepare_yuu_data() # Prepare yuu_download.json
     yuuParser, site_text = get_parser(input)
@@ -185,7 +188,7 @@ def main_downloader(input, username, password, proxy, res, resR, mux, muxfile, k
     # Initialize Download Process
     yuuDownloader = yuuParser.get_downloader()
     temp_dir = yuuDownloader.temporary_folder
-    download_failed = False
+    failed_episodes = []
     illegalchar = ['/', '<', '>', ':', '"', '\\', '|', '?', '*'] # https://docs.microsoft.com/en-us/windows/desktop/FileIO/naming-a-file
     if site_text == "unext":
         for pos, _out_ in enumerate(outputs):
@@ -213,8 +216,7 @@ def main_downloader(input, username, password, proxy, res, resR, mux, muxfile, k
             yuu_logger.info('Muxing episode')
             result = yuuDownloader.mux_episode(_out_.replace(".mp4","_decrypt_video.mp4").replace(" ", "_"), _out_.replace(".mp4","_decrypt_audio.mp4").replace(" ", "_"), _out_)
             if not result:
-                yuu_logger.warn('There\'s no available muxers that can be used, skipping...')
-                mux = False # Automatically set to False so it doesn't spam the user
+                yuu_logger.warn('There\'s no available muxers that can be used, skipping for this episode...')
             elif result and os.path.isfile(result):
                 if not keep_:
                     os.remove(_out_)
@@ -235,10 +237,12 @@ def main_downloader(input, username, password, proxy, res, resR, mux, muxfile, k
     
             if not files:
                 yuu_logger.error('{}'.format(reason))
+                failed_episodes.append(_out_)
                 continue
             key, reason = yuuParser.get_video_key(ticket)
             if not key:
                 yuu_logger.error('{}'.format(reason))
+                failed_episodes.append(_out_)
                 continue
     
             yuu_logger.info('Output: {}'.format(_out_))
@@ -251,8 +255,8 @@ def main_downloader(input, username, password, proxy, res, resR, mux, muxfile, k
             if yuuDownloader.merge: # Workaround for stream that don't use .m3u8
                 dl_list = yuuDownloader.download_chunk(files, key, iv)
                 if not dl_list:
-                    yuu_logger.error('Download failed, fragments kept for --resume')
-                    download_failed = True
+                    yuu_logger.error('Download failed')
+                    failed_episodes.append(_out_)
                     continue
             else:
                 yuuDownloader.download_chunk(files, _out_)
@@ -270,17 +274,23 @@ def main_downloader(input, username, password, proxy, res, resR, mux, muxfile, k
                     yuu_logger.info('Muxing video')
                     result = mux_video(_out_, muxfile)
                     if not result:
-                        yuu_logger.warn('There\'s no available muxers that can be used, skipping...')
-                        mux = False # Automatically set to False so it doesn't spam the user
+                        yuu_logger.warn('There\'s no available muxers that can be used, skipping for this episode...')
                     elif result and os.path.isfile(result):
                         if not keep_:
                             os.remove(_out_)
                         _out_ = result
             yuu_logger.info('Finished downloading: {}'.format(_out_))
-    if not keep_ and not (download_failed and resume):
-        shutil.rmtree(temp_dir)
-    elif download_failed and resume:
-        yuu_logger.info('Fragments saved for resume in: {}'.format(temp_dir))
+    if failed_episodes:
+        yuu_logger.warning('Download completed with {}/{} episode(s) failed:'.format(len(failed_episodes), len(outputs)))
+        for ep in failed_episodes:
+            yuu_logger.warning('  - {}'.format(ep))
+        yuu_logger.warning('Run with --resume to retry the failed episodes')
+        if not keep_:
+            shutil.rmtree(temp_dir)
+    else:
+        yuu_logger.info('All episodes downloaded successfully')
+        if not keep_:
+            shutil.rmtree(temp_dir)
     exit(0)
 
 
